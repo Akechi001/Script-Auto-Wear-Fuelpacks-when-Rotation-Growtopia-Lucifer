@@ -17,7 +17,8 @@ SLEEP_TIMES = {
     RELOGIN = 10000,
     RETRY_CHECK_ITEM = 2000
 }
-
+worldTrash = "WORLDNAME"
+doorID = "DOORIDWORLD"
 
 -- Bot setup
 bot = getBot() -- set bot that u want to check, change to getBot() = check all bot | getBot("username") = checking 1 bot account
@@ -29,7 +30,7 @@ lastTrashAttempt = 0
 function trashFish(fishID, bot)
     print("Attempting to trash fish with ID: " .. fishID)
     for _, obj in pairs(bot:getWorld():getObjects()) do
-        if obj.id == fishID then
+        if obj.id == fishID and bot:getWorld().name == worldTrash then
             print("Found fish with ID: " .. fishID .. " at position (" .. obj.x//32 .. ", " .. obj.y//32 .. ")")
             bot:findPath(obj.x // 32, obj.y // 32)
             sleep(SLEEP_TIMES.FIND_PATH)
@@ -56,6 +57,18 @@ while true do
                 if trashFish(fishID, bot) then
                     print("Fish trashed successfully. Moving to next cycle...")
                     break -- Stop checking other fish if one is found and trashed
+                elseif status ~= BotStatus.online then
+                    sleep(300)
+                    print("Bot is offline. Retrying...")
+                    sleep(reloginSleep)
+                    status = bot.status
+                elseif bot:getWorld().name == "EXIT" then
+                    sleep(300)
+                    print("Bot is in EXIT world. Retrying...")
+                    bot:warp(worldTrash,doorID)
+                    sleep(SLEEP_TIMES.WARP) -- Wait for warp to complete
+                else
+                    print("No conditions matched. Debug this!")
                 end
             end
             sleep(SLEEP_TIMES.LOOPING)
