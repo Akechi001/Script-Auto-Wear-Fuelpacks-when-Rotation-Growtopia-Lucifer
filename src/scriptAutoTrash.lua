@@ -1,4 +1,4 @@
--- Constants
+
 FISH = {
     HERMIT = 3460,
     CRAWDAD = 3458,
