@@ -45,7 +45,12 @@ function wearItem(worldItemStorage, doorID, fuelID, bot)
 
     -- insert Item in the matrix itemList
     for i, item in pairs(inventory:getItems()) do
-        table.insert(itemList, { id = item.id, name = getInfo(item.id).name, count = item.count or 0 })
+        local info = getInfo(item.id)
+        if info then
+            table.insert(itemList, { id = item.id, name = info.name, count = item.count or 0 })
+        else
+            print("Warning: getInfo returned nil for item ID " .. tostring(item.id))
+        end
     end
 
     -- checking item based by id in the matrix itemList
@@ -65,6 +70,8 @@ function wearItem(worldItemStorage, doorID, fuelID, bot)
             sleep(pickItemSleep)
 
             if status == BotStatus.online then
+                goToWorldStorage(worldItemStorage, doorID, bot)
+                sleep(pickItemSleep)
                 goToWorldStorage(worldItemStorage, doorID, bot)
                 sleep(pickItemSleep)
                 print("Picking fuelpack")
@@ -112,6 +119,8 @@ function pickFuelPack(fuelID, bot)
             bot:findPath(obj.x // 32, obj.y // 32)
             sleep(findPathSleep)
             bot:collectObject(obj.oid, 10)
+            sleep(warpSleep)
+            bot:wear(fuelID)
             sleep(warpSleep)
             bot:wear(fuelID)
             sleep(warpSleep)
@@ -187,8 +196,6 @@ function enableFeaturesRotation(bot)
     rotation.visit_random_worlds = true
     rotation.pnb_in_home = true              	-- Enable PNB In Home
     rotation.seed_drop_amount = 100
-    rotation.auto_rest = true
-    rotation.auto_exchange = true
     rotation.auto_jammer = true
     rotation.clear_objects = true
     rotation.one_by_one = true
@@ -202,8 +209,6 @@ function enableFeaturesRotation(bot)
     if rotation.enabled
             and rotation.visit_random_worlds
             and rotation.pnb_in_home
-            and rotation.auto_rest
-            and rotation.auto_exchange
             and rotation.auto_jammer
             and rotation.clear_objects
             and rotation.one_by_one
@@ -226,10 +231,11 @@ function enableFeaturesMalady(bot)
     malady.auto_refresh = true -- Auto Refresh
 
     local spam = bot.auto_spam.messages
-    spam:set(1, "sf")
-    spam:set(2, "sd")
-    spam:set(3, "sw")
-    spam:set(4, "sf")
+    spam:set(1, "DAISY")
+    spam:set(2, "DAISY")
+    spam:set(3, "GIVE ME YOUR ANSWER")
+    spam:set(4, "I'M HALF CRAZY")
+    spam:set(5, "ALL FOR THE LOVE OF YOU")
 
     -- Check all features
     if malady.enabled
