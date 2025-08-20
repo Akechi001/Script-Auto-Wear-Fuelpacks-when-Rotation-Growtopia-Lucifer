@@ -2,13 +2,16 @@
 -- originally made by Akechi001 on github
 -- using harvester in auto wear lucifer and set the id of the shoes 1966
 
-
 --setable value
 worldItemStorage = "STORAGEWORLDNAME" -- Change it based on your world Storage (MAKE SURE IT'S CAPITAL LETTERS)
 doorID = "IDDOORWORLD" -- change it based on your id door in world storage (MAKE SURE IT'S CAPITAL LETTERS)
 fuelID = 1746 -- this is fuel pack ID in growtopia
 bot = getBot() -- set bot that u want to check, change to getBot() = check all bot | getBot("username") = checking 1 bot account
+
 cooldownTime = 3600000
+
+apiURL = "https://gtid.dev/api" -- the API endpoint
+apiModNames = {"Misthios", "Kailyx", "Jackbowe", "Solabowe"} -- list of mod names to check (case-insensitive)
 
 --sleep value
 findPathSleep = 250
@@ -18,18 +21,120 @@ pickItemSleep = 4000
 loopingSleep = 5000
 reloginSleep = 10000
 retrycheckItemSleep = 2000
-
---
--- don't change anything from below here for prevent eror
---
-
+apiCheckInterval = 5 * 60 * 1000 -- 5 minutes in milliseconds
 
 -- fix value
-status = getBot().status
+status = bot.status
 inventory = bot:getInventory()
 rotation = bot.rotation
 malady = bot.auto_malady
 lastFuelPackAttempt = 0
+
+-- ==============================
+-- Helper Functions
+-- ==============================
+
+function parseAPIData(s)
+    -- Extract online_user
+    local online_user = tonumber(s:match('"online_user"%s*:%s*(%d+)')) or 0
+
+    -- Extract mods
+    local mods = {}
+    for name, status in s:gmatch('{"name":"(.-)","status":"(.-)"') do
+        table.insert(mods, {name = name, status = status})
+    end
+
+    return {
+        playerData = { online_user = online_user },
+        modData = { mods = mods }
+    }
+end
+
+function printTable(t, indent)
+    indent = indent or 0
+    for k, v in pairs(t) do
+        local formatting = string.rep("  ", indent) .. k .. ": "
+        if type(v) == "table" then
+            print(formatting)
+            printTable(v, indent + 1)
+        else
+            print(formatting .. tostring(v))
+        end
+    end
+end
+
+-- ==============================
+-- API Integration Functions
+-- ==============================
+
+function fetchAPIData()
+    local success, data = pcall(function()
+        local client = HttpClient.new()
+        client.method = Method.get
+        client.url = apiURL
+
+        local response = client:request()
+        print("Raw API response:", response.body)
+        return response.body
+    end)
+
+    if success and data then
+        local jsonData = parseAPIData(data)
+        print("Parsed API data:")
+        printTable(jsonData)
+        return jsonData
+    else
+        print("HTTP request failed")
+    end
+    return nil
+end
+
+function checkAPIConditions(bot)
+    local data = fetchAPIData()
+    if not data then
+        print("API call failed or no data returned. Keeping bot online...")
+        return
+    end
+
+    local playerOnline = data.playerData and data.playerData.online_user or 0
+    local mods = data.modData and data.modData.mods or {}
+    local modOnline = false
+
+    -- Check if any mod in the list is online
+    for _, mod in ipairs(mods) do
+        for _, name in ipairs(apiModNames) do
+            if mod.name:lower() == name:lower() and mod.status:lower() == "online" then
+                modOnline = true
+                break
+            end
+        end
+        if modOnline then break end
+    end
+
+    -- Condition 1: Player > 95,000
+    if playerOnline > 95000 then
+            bot.auto_reconnect=false
+            print("Players > 95,000 → Bot set offline")
+        return
+    end
+
+    -- Condition 2: Any listed mod online AND player < 45,000
+    if modOnline and playerOnline < 45000 then
+            bot.auto_reconnect=false
+            bot.disconnect()
+            print("One of the mods is online & players < 45,000 → Bot set offline")
+        return
+    end
+
+    -- Otherwise, ensure bot is online
+    bot.auto_reconnect=true
+    print("No conditions triggered → Bot set online")
+end
+
+
+-- ==============================
+-- Bot Feature Functions
+-- ==============================
 
 -- checking if the user wearing fuelpack
 function wearItem(worldItemStorage, doorID, fuelID, bot)
@@ -89,8 +194,6 @@ function wearItem(worldItemStorage, doorID, fuelID, bot)
     end
 end
 
-
-
 --go to world storage
 function goToWorldStorage(worldItemStorage, doorID, bot)
     local malady = bot.auto_malady
@@ -105,8 +208,6 @@ function goToWorldStorage(worldItemStorage, doorID, bot)
         print("rotation or auto collect still active")
     end
     print("Checking status: rotation=" .. tostring(rotation.enabled) .. ", malady=" .. tostring(malady.enabled) .. ", auto_collect=" .. tostring(bot.auto_collect))
-
-
 end
 
 --pick fuel pack and auto wear from the storage world and enable rotation farm
@@ -130,7 +231,6 @@ function pickFuelPack(fuelID, bot)
             print("Successfully picked up fuel pack")
             print("World after leaving: " .. bot:getWorld().name)
             break
-
         elseif status ~= BotStatus.online then
             sleep(300)
             print("Bot is offline. Retrying...")
@@ -141,7 +241,6 @@ function pickFuelPack(fuelID, bot)
             sleep(300)
             print("Bot is in EXIT world. Retrying...")
             return
-
         else
             print("No conditions matched. Debug this!")
         end
@@ -166,7 +265,6 @@ function pickFuelPack(fuelID, bot)
             print("No conditions matched. Debug this!")
         end
     end
-
 end
 
 function enableRotationFarmAfterPickItem(bot)
@@ -176,7 +274,6 @@ function enableRotationFarmAfterPickItem(bot)
     rotation.enabled = true
     malady.enabled = true
     bot.auto_collect = true
-
 
     -- checking if the features is enable
     if rotation.enabled and malady.enabled and bot.auto_collect then
@@ -194,16 +291,16 @@ function enableFeaturesRotation(bot)
     -- Enable rotation setting
     rotation.enabled = true
     rotation.visit_random_worlds = true
-    rotation.pnb_in_home = true              	-- Enable PNB In Home
+    rotation.pnb_in_home = true
     rotation.seed_drop_amount = 100
     rotation.auto_jammer = true
     rotation.clear_objects = true
     rotation.one_by_one = true
 
-    bot.auto_ban = true                 	-- Enable Auto Ban Players
-    bot.auto_wear = true			-- Enable Auto Wear
+    bot.auto_ban = true
+    bot.auto_wear = true
     bot.dynamic_delay = true
-    bot.wear_storage = worldItemStorage.."|"..doorID		-- Wear storage
+    bot.wear_storage = worldItemStorage.."|"..doorID
 
     -- Check all features
     if rotation.enabled
@@ -222,13 +319,12 @@ function enableFeaturesRotation(bot)
     end
 end
 
-
 function enableFeaturesMalady(bot)
     -- Enable malady settings
     malady.enabled = true
-    malady.auto_chicken_feet = true -- Auto Chicken Feet
-    malady.auto_grumbleteeth = true -- Auto Grumbleteeth
-    malady.auto_refresh = true -- Auto Refresh
+    malady.auto_chicken_feet = true
+    malady.auto_grumbleteeth = true
+    malady.auto_refresh = true
 
     local spam = bot.auto_spam.messages
     spam:set(1, "DAISY")
@@ -249,34 +345,35 @@ function enableFeaturesMalady(bot)
     end
 end
 
+-- ==============================
+-- Main Execution Loop
+-- ==============================
 
---execution function
+-- Track API timer
+lastAPIUpdate = 0
+
 while true do
+    status = bot.status
+
+    -- Initialize features if bot online
     if status == BotStatus.online then
-        if enableFeaturesMalady then
-            enableFeaturesMalady(bot)
-        else
-            print("Error: enableFeaturesMalady is nil")
-        end
+        enableFeaturesMalady(bot)
+        enableFeaturesRotation(bot)
+    end
 
-        if enableFeaturesRotation then
-            enableFeaturesRotation(bot)
-        else
-            print("Error: enableFeaturesRotation is nil")
-        end
+    -- Check API every 5 minutes
+    local currentTime = os.time() * 1000
+    if currentTime - lastAPIUpdate >= apiCheckInterval then
+        checkAPIConditions(bot)
+        lastAPIUpdate = currentTime
+    end
 
-        while status == BotStatus.online do
-            wearItem(worldItemStorage, doorID, fuelID, bot)
-            print("")
-            print("")
-            sleep(loopingSleep)
-        end
-        print("Bot went offline. Restarting feature initialization...")
-        sleep(reloginSleep)
-        status = bot.status
+    -- Main rotation loop
+    if status == BotStatus.online then
+        wearItem(worldItemStorage, doorID, fuelID, bot)
+        sleep(loopingSleep)
     else
-        print("Bot is offline, retrying in 10 seconds...")
+        print("Bot is offline. Waiting to retry...")
         sleep(reloginSleep)
-        status = bot.status
     end
 end
